@@ -78,17 +78,18 @@ enum class RepoAttribute {
     mirrors,
 };
 
-std::vector<RepoAttribute> metadata_required_attributes{
+std::vector<RepoAttribute> metadata_cache_required_attributes{
     RepoAttribute::cache_updated,
-    RepoAttribute::repofile,
     RepoAttribute::revision,
     RepoAttribute::content_tags,
     RepoAttribute::distro_tags,
     RepoAttribute::updated,
+    RepoAttribute::mirrors};
+
+std::vector<RepoAttribute> sack_required_attributes{
     RepoAttribute::size,
     RepoAttribute::pkgs,
-    RepoAttribute::available_pkgs,
-    RepoAttribute::mirrors};
+    RepoAttribute::available_pkgs};
 
 // map string package attribute name to actual attribute
 const static std::map<std::string, RepoAttribute> repo_attributes{
@@ -453,23 +454,44 @@ sdbus::MethodReply Repo::list(sdbus::MethodCall & call) {
     // check demanded attributes
     std::vector<std::string> repo_attrs =
         dnfdaemon::key_value_map_get<std::vector<std::string>>(options, "repo_attrs", empty_list);
-    bool fill_sack_needed = false;
+
+    bool sack_needed = false;
+    bool cache_needed = false;
     for (auto & attr_str : repo_attrs) {
         if (repo_attributes.count(attr_str) == 0) {
             throw std::runtime_error(fmt::format("Repo attribute '{}' not supported", attr_str));
         }
-        if (!fill_sack_needed) {
-            fill_sack_needed = std::find(
-                                   metadata_required_attributes.begin(),
-                                   metadata_required_attributes.end(),
-                                   repo_attributes.at(attr_str)) != metadata_required_attributes.end();
+        auto attr = repo_attributes.at(attr_str);
+        if (!sack_needed) {
+            sack_needed = std::find(
+                              sack_required_attributes.begin(),
+                              sack_required_attributes.end(),
+                              attr) != sack_required_attributes.end();
+        }
+        if (!cache_needed) {
+            cache_needed = std::find(
+                               metadata_cache_required_attributes.begin(),
+                               metadata_cache_required_attributes.end(),
+                               attr) != metadata_cache_required_attributes.end();
         }
     }
     // always return repoid
     repo_attrs.push_back("id");
-    if (fill_sack_needed) {
+
+    if (sack_needed) {
         bool interactive = dnfdaemon::key_value_map_get<bool>(options, "interactive", false);
         session.fill_sack(interactive);
+    } else if (cache_needed) {
+        auto base = session.get_base();
+        libdnf5::repo::RepoQuery repos(*base);
+        repos.filter_enabled(true);
+        repos.filter_type(libdnf5::repo::Repo::Type::AVAILABLE);
+        for (auto & repo : repos) {
+            try {
+                repo->read_metadata_cache();
+            } catch (const std::runtime_error &) {
+            }
+        }
     }
 
     // prepare repository query filtered by options
