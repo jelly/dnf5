@@ -50,6 +50,7 @@ private:
     void wait_for_network();
 
     std::unique_ptr<libdnf5::cli::session::BoolOption> timer{nullptr};
+    std::unique_ptr<libdnf5::cli::session::BoolOption> dump_config{nullptr};
     ConfigAutomatic config_automatic;
     bool download_callbacks_set{false};
     std::stringstream output_stream;

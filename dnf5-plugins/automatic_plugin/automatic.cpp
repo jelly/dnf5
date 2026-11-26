@@ -118,6 +118,18 @@ static bool curl_protocol_supported(std::string_view protocol) {
     return false;
 }
 
+static void dump_section(std::ostream & out, std::string_view name, libdnf5::Config & config) {
+    out << '[' << name << ']' << std::endl;
+    for (const auto & [key, option] : config.opt_binds()) {
+        try {
+            out << key << " = " << option.get_value_string() << std::endl;
+        } catch (const libdnf5::OptionError &) {
+            out << key << std::endl;
+        }
+    }
+    out << std::endl;
+}
+
 }  // namespace
 
 
@@ -263,6 +275,8 @@ void AutomaticCommand::set_argument_parser() {
         _("Do not automatically install downloaded updates"),
         true,
         &config_automatic.config_commands.apply_updates);
+    dump_config = std::make_unique<libdnf5::cli::session::BoolOption>(
+        *this, "dump-config", '\0', _("Print configuration values to stdout."), false);
 
     // downloadupdates and no-downloadupdates options conflict with each other.
     {
@@ -359,6 +373,15 @@ void AutomaticCommand::pre_configure() {
     load_config_file(resolve_path("/etc/dnf/automatic.conf"));
     //      - [installroot]/etc/dnf/automatic.conf.d/*.conf (sorted)
     load_config_dir(resolve_path("/etc/dnf/automatic.conf.d"));
+
+    if (dump_config->get_value()) {
+        dump_section(std::cout, "commands", config_automatic.config_commands);
+        dump_section(std::cout, "emitters", config_automatic.config_emitters);
+        dump_section(std::cout, "email", config_automatic.config_email);
+        dump_section(std::cout, "command", config_automatic.config_command);
+        dump_section(std::cout, "command_email", config_automatic.config_command_email);
+        throw libdnf5::cli::SilentCommandExitError(0);
+    }
 
     auto random_sleep = config_automatic.config_commands.random_sleep.get_value();
     if (timer->get_value() && random_sleep > 0) {

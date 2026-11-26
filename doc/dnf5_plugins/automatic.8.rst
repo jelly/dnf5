@@ -48,6 +48,9 @@ Options
 ``--timer``
     | Apply random delay before execution.
 
+``--dump-config``
+    |  Print configuration values to stdout.
+
 The following options can be used to override values from the configuration file.
 
 ``--downloadupdates``
