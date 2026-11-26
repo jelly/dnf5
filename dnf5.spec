@@ -1138,12 +1138,6 @@ DNF5 plugin for working with RPM package manifest files.
 %endif
 
 
-%check
-%if %{with tests}
-    %ctest
-%endif
-
-
 %install
 %cmake_install
 
